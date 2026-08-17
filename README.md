@@ -1,62 +1,41 @@
-# Local RAG System for Technical Knowledge Base
+# Privacy-First RAG Architecture
 
-## Aperçu du projet
-Ce dépôt documente le déploiement d'une architecture RAG (Retrieval-Augmented Generation) 100 % locale, souveraine et gratuite. Elle permet d'interroger une base de connaissances technique personnelle (fichiers Markdown) via des LLMs exécutés en local. 
+Architecture 100% locale, asynchrone et sans appel d'API externe, conçue pour l'ingénierie Machine Learning, le Deep Learning (PyTorch) et la recherche scientifique.
 
-Ce projet démontre l'intégration de modèles open-source avec accélération matérielle, sans dépendance à des API cloud tierces, garantissant une confidentialité totale des données et une absence de coûts d'inférence.
+## 🛠 Infrastructure Matérielle et Logicielle
 
-## Architecture technique
-- **Moteur d'inférence :** Ollama (déployé en tant que service `systemd` local).
-- **Base de données / Interface :** Obsidian (fichiers `.md` structurés).
-- **Orchestration RAG :** Plugin Obsidian Copilot (moteur d'exécution `opencode` via endpoint BYOK OpenAI-compatible).
-- **Modèle d'Embedding :** `nomic-embed-text` (Vectorisation de la base documentaire).
-- **Modèles de Génération (LLM) :** `llama3.1:8b`, `qwen2.5-coder:32b`, `command-r:35b` (sélection dynamique selon la tâche).
+- **OS :** Ubuntu Linux 
+- **GPU :** NVIDIA GeForce RTX 5080 (16 Go VRAM)
+- **RAM :** 64 Go
+- **Moteur d'inférence :** Ollama (Service système Linux natif)
+- **Interfaces :** Obsidian (Plugin Copilot) & Open WebUI (Docker)
 
-## Prérequis matériels et logiciels
-- **OS :** Linux (Ubuntu recommandé).
-- **Compute :** GPU NVIDIA avec VRAM suffisante pour le déchargement partiel ou total des modèles (Architecture testée sur NVIDIA GeForce RTX 5080, 64 Go RAM).
-- **Dépendances :** `ollama`, `python3`, `jupyter nbconvert`.
+## 🧠 Modèles et Répartition des Tâches
 
-## Installation et Dépendances
+Pour éviter la saturation matérielle (KV Cache) et le goulot d'étranglement de la RAM système, les modèles sont strictement isolés par interface et par tâche.
 
-### 1. Applications système requises
-Ce projet s'appuie sur des logiciels indépendants de l'environnement Python. Vous devez les installer manuellement sur votre système d'exploitation :
+### 1. Obsidian (Théorie et RAG Rapide)
+- **Modèle :** `qwen2.5:14b`
+- **Exécution :** 100% VRAM. Vitesse d'inférence maximale.
+- **Rôle :** Synthèse de fiches de cours, requêtes théoriques.
+- **Contrainte :** Les modèles de la gamme "Coder" sont exclus de cette interface pour bloquer les boucles de formatage JSON provoquées par les instructions agentiques cachées du plugin.
 
-- **Ollama** : Moteur d'exécution pour les modèles locaux.
-  - Installation (Linux) : `curl -fsSL https://ollama.com/install.sh | sh`
-- **Obsidian** : Interface utilisateur et gestionnaire de la base de connaissances.
-  - Téléchargement : `https://obsidian.md/download`
-- **Python 3** : Nécessaire uniquement pour exécuter le script de conversion et d'ingestion (`scripts/ingestion_pipeline.py`).
+### 2. Open WebUI (Ingénierie MLOps & Code)
+- **Modèle :** `qwen2.5-coder:32b`
+- **Exécution :** Débordement partiel de la VRAM vers la RAM système.
+- **Rôle :** Conception d'architectures Docker, pipelines scikit-learn, API FastAPI, scripts de validation croisée.
 
-### 2. Téléchargement des modèles d'IA (Ollama)
-Une fois le service système Ollama actif, ouvrez un terminal et exécutez ces commandes pour télécharger les modèles d'embedding et de génération de texte :
+### 3. Open WebUI (Recherche Scientifique)
+- **Modèle :** `qwen3.8:27b`
+- **Exécution :** Débordement partiel de la VRAM vers la RAM système.
+- **Rôle :** Raisonnement profond, analyse multimodale, extraction de méthodologies à partir de la recherche académique.
 
-```bash
-# Modèle d'indexation vectorielle (obligatoire pour le RAG)
-ollama pull nomic-embed-text
+## ⚙️ Configuration Système (Ollama + Docker)
 
-# Modèle généraliste pour la synthèse des notes et la théorie
-ollama pull llama3.1
+Pour permettre à Open WebUI (isolé dans son conteneur Docker) de communiquer avec Ollama sur l'hôte Ubuntu, le service Linux est modifié pour écouter sur toutes les interfaces :
 
-# Modèle principal pour le code (Rapide avec une VRAM 16 Go)
-ollama pull qwen2.5-coder:14b
-
-# Modèle expert MLOps (Plus lent, nécessite de la RAM supplémentaire pour une VRAM de 16 Go)
-ollama pull qwen2.5-coder:32b
-```
-## Stratégie multi-modèles
-Le système exploite plusieurs LLMs locaux pour équilibrer la vitesse d'inférence et l'expertise technique, en fonction des limites de la VRAM :
-- **`qwen2.5-coder:14b` :** Le modèle par défaut pour la rédaction de scripts Python et l'analyse de données courante. Il se charge intégralement dans la VRAM du GPU (16 Go) pour garantir une vitesse de génération maximale.
-- **`qwen2.5-coder:32b` :** Le modèle expert dédié aux architectures MLOps et aux pipelines complexes. Son poids (environ 20 Go) impose un déchargement partiel sur la RAM système, réduisant la vitesse d'inférence en échange d'une précision maximale sur le code.
-- **`llama3.1:8b` :** Utilisé spécifiquement pour l'interrogation sémantique de la base de connaissances et la synthèse de notes théoriques.
-
-## Pipeline de traitement des données
-1. **Ingestion :** Conversion des documents techniques (notebooks, documentations) en fichiers Markdown textuels via scripts Python automatisés.
-2. **Indexation :** Le modèle d'embedding génère les vecteurs à la volée sur le GPU pour les documents déposés dans le répertoire cible.
-3. **Inférence :** L'interface utilisateur interroge l'endpoint local `http://localhost:11434/v1` via des instructions système prédéfinies.
-
-## Instructions système (Prompt Engineering)
-Le comportement du LLM est calibré via un fichier de configuration (voir dossier `prompts/AGENTS.md`). Les directives forcent l'assistant à prioriser le contexte fourni par la recherche vectorielle, à produire du code Python modulaire (PEP 8, typage) et à justifier ses choix algorithmiques en Data Science.
-
-
-
+1. Édition du service : `sudo systemctl edit ollama.service`
+2. Ajout des règles réseau :
+```ini
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0"
