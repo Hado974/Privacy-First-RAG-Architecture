@@ -1,0 +1,3 @@
+# Il se lance depuis le terminal avec les arguments par défaut ou modifiés
+
+python scripts/ingestion_pipeline.py --source ./mes_notebooks --dest ./mon_vault
